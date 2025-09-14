@@ -1,0 +1,131 @@
+page.tsx
+
+Doel: pagina-container voor de Competenties-tab van een sessie.
+Belangrijkste taken:
+
+Leest en schrijft sessiedata naar Supabase tabel sessions (velden o.a.: selected_competencies, observations, competency_scores, personality_relations, generated_texts, personality_data).
+
+Bevat autosave (debounced) richting Supabase.
+
+Rendered de UI via <CompetentieInterface … /> en geeft alle handlers/props door.
+
+Dataflow:
+Supabase ⇄ page.tsx (state) → CompetentieInterface (UI)
+
+competentie-interface.tsx
+
+Doel: de volledige UI voor het selecteren, scoren, relateren en genereren per competentie.
+Belangrijkste functies:
+
+Toont persoonlijke gegevens (aanspreekwijze + naam) door ze direct uit sessions te lezen (alleen-lezen check om te garanderen dat generatie kan).
+
+Links: lijst met hoofd- en extra competenties (import uit competentie-lijst.ts).
+
+Rechts: per geselecteerde competentie:
+
+Observatieveld (leidend voor de AI-tekst).
+
+Score 1–5 (richtinggevend, niet letterlijk in output).
+
+Checkbox “Relateer aan Persoonlijkheidstest” (stuurt personality context mee).
+
+Uitwerking-veld (AI-output) is bewerktbaar.
+
+Genereer-knop → roept generateCompetencyText() aan.
+
+Koppelingen:
+
+Roept generateCompetencyText() uit ai-generation-competencies.ts met:
+
+competency, observation, score, relateToPersonality
+
+personalityData alleen met aanspreekwijze + naam (uit sessions).
+
+callbacks: onGeneratedTextChange, setIsGenerating, setError.
+
+ai-generation-competencies.ts
+
+Doel: alle AI-logica voor het schrijven van competentieteksten.
+Belangrijkste functies/onderdelen:
+
+deepFind(obj, aliases): robuust ophalen van velden met verschillende sleutel-namen/structuren.
+
+resolveAddressing(): exacte aanspreekwijze/naam bepalen (zelfde logica als Personality).
+
+generateCompetencyText(props): bouwt de prompts en doet de OpenAI call.
+
+Voornaamwoorden kiezen op basis van aanspreekwijze (“hij/zij”, “zijn/haar”).
+
+Observaties leidend; score alleen richtinggevend (model krijgt opdracht de score niet letterlijk te noemen).
+
+Gated personality context:
+
+Alleen als relateToPersonality === true en er is personality_text (via deepFind(["personality_text","personalityText"])), dan een kort, getrunct contextblok (~1200 tekens) + instructie om subtiel 1–2 zinnen te verbinden met de competentie.
+
+Zo niet: expliciete opdracht niet te relateren.
+
+Stijlregels: 200–350 woorden, aaneengesloten tekst (geen alinea’s/opsommingen), naam/aanspreekwijze slechts 1× in de openingszin, daarna alleen voornaamwoorden, geen AI-jargon.
+
+Stijlvoorbeelden (niet kopiëren): gebruikt COMPETENCY_EXAMPLES uit competentie-voorbeelden.tsx als toon/structuur-voorbeeld.
+
+Fail-soft: als relatie is aangevinkt maar er is geen personality text, verschijnt een milde waarschuwing via setError, generatie gaat door zonder relatie.
+
+Koppelingen:
+
+Gebruikt voorbeelden uit competentie-voorbeelden.tsx.
+
+Schrijft resultaat terug via onGeneratedTextChange(competency, text) zodat page.tsx het kan opslaan in generated_texts[competency].
+
+competentie-lijst.ts
+
+Doel: bron van alle beschikbare competenties.
+Exports:
+
+MAIN_COMPETENCIES: kernlijst die standaard getoond wordt.
+
+ADDITIONAL_COMPETENCIES: uitklapbare extra’s.
+
+type Competency: string-type dat door de hele module wordt gebruikt.
+
+Gebruik:
+
+UI in competentie-interface.tsx rendert de checkbox-lijsten met deze arrays.
+
+Keys in generated_texts matchen de exacte naam van de competentie.
+
+competentie-voorbeelden.tsx
+
+Doel: 3–4 realistische voorbeeldteksten ter referentie van stijl/structuur.
+Export:
+
+COMPETENCY_EXAMPLES: { id, competency, text }[]
+
+Gebruik:
+
+ai-generation-competencies.ts voegt deze voorbeelden als context toe aan de prompt (niet letterlijk kopiëren; puur toon/ritme).
+
+End-to-end flow (samenvatting)
+
+Gebruiker selecteert competenties, schrijft observaties, kiest optioneel relateer en score.
+
+Klik op Genereer → competentie-interface.tsx roept generateCompetencyText() aan.
+
+generateCompetencyText():
+
+Vindt aanspreekwijze/naam, bepaalt voornaamwoorden.
+
+Bouwt systeem- en user-prompt incl.:
+
+Observaties (leidend)
+
+Eventuele personality-context (alleen indien aangevinkt + aanwezig)
+
+Voorbeeldteksten (stijl)
+
+Stijlregels (200–350 woorden, 1× naam/aanspreekwijze, geen score-vermelding, aaneengesloten tekst)
+
+Doet OpenAI call, geeft resultaat terug via onGeneratedTextChange().
+
+UI toont en maakt de uitwerking bewerkbaar.
+
+page.tsx autosavet alle velden naar Supabase (generated_texts als JSONB met key = competentie).

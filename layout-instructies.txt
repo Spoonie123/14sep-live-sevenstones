@@ -1,0 +1,28 @@
+1. app/layout.tsx (De Buitenste Doos)
+Dit is de hoofdlayout van je hele app. Je kunt het zien als de buitenste doos waarin alles zit, zoals de HTML-structuur (<html>, <body>, <head>). Het is een Server Component, wat betekent dat het op de server draait en geen interactie met de gebruiker heeft (geen knoppen, geen staat).
+
+Functie: Zorgt voor de basisstructuur van elke pagina. Het bevat de AppWrapper die het echte werk doet.
+
+2. app-wrapper.tsx (De Intelligente Schil)
+Dit is de centrale hersen van je app, geplakt in de buitenste doos (app/layout.tsx). Het is een Client Component, wat betekent dat het in de browser van de gebruiker draait.
+
+Functie: Haalt de sessiegegevens op uit de database (via Supabase), beheert de staat van je app (zoals welke sessies er zijn, welke er geselecteerd is), en geeft deze gegevens door aan de HistorySidebar en de rest van de pagina. Het verbindt je data met de UI.
+
+3. components/history-sidebar.tsx (De Interactieve Zijbalk)
+Dit is de gebruikersinterface van de zijbalk. Het is een Client Component dat de gegevens van de AppWrapper ontvangt.
+
+Functie: Het toont de sessies in een lijst, reageert op klikken van de gebruiker (bijv. op een knop 'verwijderen' of 'bewerken'), en stuurt deze acties terug naar de AppWrapper die de database aanpast.
+
+4. session/[id]/layout.tsx (De Pagina-Indeling)
+Dit is een geneste layout die alleen actief wordt wanneer je een specifieke sessie bekijkt (bijvoorbeeld /session/123).
+
+Functie: Zorgt voor de specifieke opmaak van de sessiepagina, zoals de koptekst "SEVEN STONES" en de navigatietabs (TabNav), die boven de inhoud ({children}) van die pagina verschijnen. Het werkt als een extra 'laag' bovenop de AppWrapper-layout.
+
+Hoe Ze Samenwerken: Een Verhaal
+De Buitenste Doos (layout.tsx) wikkelt je hele applicatie in. Binnenin plaatst het de Intelligente Schil (app-wrapper.tsx).
+
+De Intelligente Schil (app-wrapper.tsx) haalt de sessies op uit de database en geeft deze door aan de Interactieve Zijbalk (history-sidebar.tsx).
+
+De Interactieve Zijbalk (history-sidebar.tsx) toont de sessies en wanneer je op een knop klikt, roept het een functie aan in de Intelligente Schil.
+
+Wanneer de gebruiker naar een specifieke sessie navigeert, plaatst de Pagina-Indeling (session/[id]/layout.tsx) zijn eigen inhoud (zoals de TabNav) in het main gedeelte dat de Intelligente Schil heeft gecreëerd. Zo zorgen ze er samen voor dat de sidebar altijd zichtbaar is, terwijl de hoofdinhoud van de pagina verandert.

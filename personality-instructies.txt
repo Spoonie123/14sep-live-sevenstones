@@ -1,0 +1,46 @@
+Overzicht van de 'personality'-map
+
+Deze map bevat de bestanden voor het genereren van een persoonlijkheidsrapport op basis van de NEO-PI-3 scores. De bestanden zijn geschreven in TypeScript en gebruiken React voor de gebruikersinterface.
+
+personality-types.ts
+
+Functie: Dit bestand is de "blueprint" voor de data. Het definieert het type PersonalityData, wat ervoor zorgt dat alle andere bestanden precies weten welke informatie een persoonlijkheidsprofiel bevat.
+
+Samenwerking: Dit type wordt geïmporteerd door alle andere bestanden om een consistente datastructuur te garanderen. Denk hierbij aan de voornaam, achternaam, de NEO-scores (neo_scores) en de gegenereerde tekst.
+
+neo-velden.tsx
+
+Functie: Dit component is verantwoordelijk voor de gebruikersinterface waar de NEO-scores worden ingevoerd. Het toont de vijf hoofddomeinen en hun facetten, met invoervelden van 1 tot 9. Het geeft ook direct een interpretatie ("Laag", "Gemiddeld", "Hoog") op basis van de ingevoerde score.
+
+Samenwerking: Het ontvangt de personalityData en setPersonalityData functies als props om de ingevoerde scores direct in de algemene staat op te slaan.
+
+ai-generation-personality.tsx
+
+Functie: Dit is de "motor" van het proces. Het bevat de logica om een prompt op te bouwen en deze naar een AI-model (zoals OpenAI's GPT) te sturen. De prompt wordt gebouwd op basis van de ingevoerde scores, de naam van de persoon en de context van de NEO-PI-3 test. Het ontvangt de gegenereerde tekst en slaat deze op in de personalityText eigenschap.
+
+Samenwerking: Dit component gebruikt personalityData om de prompt te creëren en de geüpdatete data op te slaan via setPersonalityData. De gegenereerde tekst wordt ook opgeslagen in een database via Supabase.
+
+personal-info.tsx
+
+Functie: Dit component regelt de invoer van de persoonlijke informatie, zoals de voornaam, achternaam en de aanspreektitel (De heer, Mevrouw, Voornaam).
+
+Samenwerking: Net als neo-velden.tsx, gebruikt het de personalityData en setPersonalityData om de persoonlijke informatie bij te houden in de algemene staat.
+
+page.tsx
+
+Functie: Dit is de "hoofd"-pagina. Het brengt alle andere componenten samen: personal-info.tsx, neo-velden.tsx en ai-generation-personality.tsx. Het beheert de algehele staat van het formulier en zorgt ervoor dat de data tussen de verschillende componenten wordt gesynchroniseerd.
+
+Samenwerking: De page.tsx fungeert als een centrale hub die de personalityData staat vasthoudt en deze doorgeeft aan de andere componenten.
+
+Hoe de bestanden samenwerken:
+
+De gebruiker vult zijn persoonlijke informatie in via personal-info.tsx en de scores via neo-velden.tsx.
+
+Beide componenten gebruiken de setPersonalityData-functie om de centrale personalityData-staat, die zich in page.tsx bevindt, bij te werken.
+
+Wanneer de gebruiker op "Genereer" klikt, gebruikt ai-generation-personality.tsx de geüpdatete personalityData om een prompt te maken en stuurt deze naar de AI.
+
+De ontvangen tekst wordt teruggegeven aan ai-generation-personality.tsx, die het opslaat in de personalityData-staat en ook in de database.
+
+De page.tsx rendert de hele tijd de nieuwste versie van de personalityData, inclusief de gegenereerde tekst.
+
