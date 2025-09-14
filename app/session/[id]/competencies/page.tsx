@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef, use } from "react"
-import { createBrowserClient } from "@supabase/ssr"
 import { CompetentieInterface } from "./competentie-interface"
 import { type Competency } from "./competentie-lijst"
+import { supabase } from "../../../../lib/supabase" // ✅ lazy/browser-safe client
 
 // Type van wat in Supabase staat
 interface SessionData {
@@ -20,11 +20,6 @@ export default function CompetentiesPage({ params }: { params: Promise<{ id: str
   const { id: sessionId } = use(params)
 
   const [sessionData, setSessionData] = useState<SessionData | null>(null)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null)
 
   // Data ophalen bij laden
@@ -69,8 +64,6 @@ export default function CompetentiesPage({ params }: { params: Promise<{ id: str
         return
       }
 
-      console.log("✅ Data geladen:", data)
-
       setSessionData({
         selected_competencies: data.selected_competencies || [],
         observations: data.observations || {},
@@ -84,7 +77,7 @@ export default function CompetentiesPage({ params }: { params: Promise<{ id: str
     if (sessionId) {
       loadSessionData()
     }
-  }, [sessionId, supabase])
+  }, [sessionId])
 
   // Autosave
   useEffect(() => {
@@ -95,8 +88,6 @@ export default function CompetentiesPage({ params }: { params: Promise<{ id: str
     }
 
     debounceTimeout.current = setTimeout(async () => {
-      console.log("💾 Saving data to Supabase…")
-
       const { error } = await supabase
         .from("sessions")
         .update({
@@ -121,7 +112,7 @@ export default function CompetentiesPage({ params }: { params: Promise<{ id: str
         clearTimeout(debounceTimeout.current)
       }
     }
-  }, [sessionData, sessionId, supabase])
+  }, [sessionData, sessionId])
 
   // Handlers
   const handleCompetencyToggle = (competency: Competency) => {
@@ -180,7 +171,7 @@ export default function CompetentiesPage({ params }: { params: Promise<{ id: str
   return (
     <div className="bg-gray-100 min-h-screen py-12 flex items-center justify-center">
       <CompetentieInterface
-        sessionId={sessionId}                         
+        sessionId={sessionId}
         selectedCompetencies={sessionData.selected_competencies}
         observations={sessionData.observations}
         competencyScores={sessionData.competency_scores}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@supabase/supabase-js"
+import { supabase } from "../../lib/supabase"
 
 type SessionRow = {
   id: string
@@ -11,11 +11,6 @@ type SessionRow = {
   step: number | null
   neo_report_name: string | null
 }
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 export default function HomePage() {
   const router = useRouter()
@@ -67,13 +62,11 @@ export default function HomePage() {
   const handleNewSession = async (name: string): Promise<string | null> => {
     setCreating(true)
     setError(null)
-    // Probeer een “veilige” insert met basisvelden
     const { data, error } = await supabase
       .from("sessions")
       .insert({
         name,
         step: 0,
-        // Optioneel: initialiseer veelgebruikte JSON/arrays om not-null te vermijden
         selected_competencies: [],
         observations: {},
         competency_scores: {},
@@ -92,7 +85,6 @@ export default function HomePage() {
       return null
     }
 
-    // Refresh lijst (optioneel)
     const { data: refreshed } = await supabase
       .from("sessions")
       .select("id, name, updated_at, step, neo_report_name")
@@ -217,7 +209,7 @@ export default function HomePage() {
               borderRadius: "8px",
               display: "inline-block",
               fontSize: "18px",
-              fontWeight: "500",
+              fontWeight: 500,
             }}
           >
             {creating ? "Bezig..." : "Snel Starten"}
@@ -310,7 +302,7 @@ export default function HomePage() {
                   <h4
                     style={{
                       fontSize: "16px",
-                      fontWeight: "600",
+                      fontWeight: 600,
                       color: "#003366",
                       margin: "0 0 4px 0",
                     }}
@@ -355,7 +347,7 @@ export default function HomePage() {
                   borderRadius: "8px",
                   cursor: "pointer",
                   fontSize: "16px",
-                  fontWeight: "500",
+                  fontWeight: 500,
                 }}
               >
                 {showAllSessions ? "Minder sessies tonen" : `Alle ${sessions.length} sessies bekijken`}
@@ -380,7 +372,7 @@ export default function HomePage() {
           <h3
             style={{
               fontSize: "20px",
-              fontWeight: "600",
+              fontWeight: 600,
               color: "#003366",
               margin: "0 0 12px 0",
             }}
@@ -407,7 +399,7 @@ export default function HomePage() {
               border: "none",
               cursor: creating ? "not-allowed" : "pointer",
               fontSize: "18px",
-              fontWeight: "500",
+              fontWeight: 500,
             }}
           >
             {creating ? "Bezig..." : "✨ Eerste Assessment Starten"}

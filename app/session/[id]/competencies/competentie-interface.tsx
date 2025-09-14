@@ -12,13 +12,8 @@ import {
   generateCompetencyText,
 } from "./ai-generation-competencies";
 import type { PersonalityData } from "../personality/personality-types";
-import { createClient } from "@supabase/supabase-js";
-
-/** ---- Supabase browser client ---- */
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// ⬇️ Vervangen: geen top-level createClient meer
+import { supabase } from "../../../../lib/supabase";
 
 type SessionsRow = {
   person_title: string | null;

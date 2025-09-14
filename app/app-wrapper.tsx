@@ -2,7 +2,7 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import HistorySidebar from "./components/history-sidebar";
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from "../lib/supabase";
 import { useRouter, usePathname } from 'next/navigation';
 
 // Define a type for the session data to ensure type safety.
@@ -13,12 +13,6 @@ type Session = {
   updated_at: string;
   neo_report_name: string | null;
 };
-
-// Initialize the Supabase client.
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function AppWrapper({ children }: { children: ReactNode }) {
   const [showHistory, setShowHistory] = useState(true);
