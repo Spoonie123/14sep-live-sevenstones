@@ -1,17 +1,32 @@
 // lib/supabase.ts
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+let _client: SupabaseClient | null = null;
 
-// 👉 Maak één gedeelde client aan die zowel in browser als server kan worden gebruikt.
-//    (We gooien geen error bij import; met ontbrekende envs loggen we alleen een warning.)
-if (!url || !anon) {
-  // Niet crashen tijdens build; wel duidelijk loggen.
-  console.warn(
-    "[supabase] Ontbrekende env vars: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY"
-  );
+function getClient(): SupabaseClient {
+  if (_client) return _client;
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anon) {
+    // Niet bij import falen; alleen wanneer er écht Supabase gebruikt wordt.
+    throw new Error(
+      "[supabase] Ontbrekende env vars: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY. " +
+        "Zet ze in Vercel (Project → Settings → Environment Variables → Production) en redeploy."
+    );
+  }
+
+  _client = createClient(url, anon);
+  return _client;
 }
 
-// Lege string fallback voorkomt type-errors; in praktijk zul je echte envs hebben.
-export const supabase: SupabaseClient = createClient(url ?? "", anon ?? "");
+// Export die hetzelfde blijft als vroeger: `supabase.from(...)
+// Maar de echte client wordt pas gebouwd zodra je er iets op aanroept.
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop, receiver) {
+    const client = getClient();
+    // @ts-ignore – dynamic forward
+    return Reflect.get(client, prop, receiver);
+  },
+});
