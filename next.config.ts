@@ -1,13 +1,19 @@
+// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Laat de build niet falen op ESLint-fouten
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  // Laat de build niet falen op TypeScript type errors
-  typescript: {
-    ignoreBuildErrors: true,
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
+  experimental: { optimizePackageImports: ["@supabase/supabase-js"] },
+
+  async redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/login",
+        permanent: false, // 307 on Vercel edge
+      },
+    ];
   },
 };
 
