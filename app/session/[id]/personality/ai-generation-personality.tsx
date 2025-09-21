@@ -1,19 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { PersonalityData, PERSON_TITLES } from "./personality-types";
+import { useState, type ChangeEvent } from "react";
+import { PersonalityData } from "./personality-types";
 import { neoExplanations } from "./neo-explanations";
 import { personalityExamples } from "./personality-examples";
-
-import { createClient } from "@supabase/supabase-js";
-
-// Supabase client is hier niet langer nodig omdat page.tsx het al regelt.
-// Je zou dit kunnen verwijderen voor een schonere code.
 
 interface Props {
   personalityData: PersonalityData;
   setPersonalityData: (data: any) => void;
-  // onSave is verwijderd, omdat autosave in page.tsx het opslaan regelt
   isCompleted: boolean;
   sessionId: string;
 }
@@ -32,8 +26,6 @@ export default function AiGenerationPersonality({
     setError(null);
 
     const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
-    
-    // Stap 1: Haal de benodigde data op en voer null-checks uit
     const { neo_scores, personTitle, first_name, last_name } = personalityData;
 
     if (!neo_scores || !personTitle || (!first_name && !last_name)) {
@@ -42,14 +34,12 @@ export default function AiGenerationPersonality({
       return;
     }
 
-    // Stap 2: Bepaal de correcte aanspreekwijze
+    // Aanspreekwijze + naam
     let displayName = "";
     let addressForm = "";
-    const name = first_name || last_name;
-
     if (personTitle === "Voornaam") {
       displayName = first_name || "";
-      addressForm = displayName;
+      addressForm = "";
     } else if (personTitle === "De heer") {
       displayName = `de heer ${last_name || ""}`;
       addressForm = "de heer";
@@ -58,60 +48,75 @@ export default function AiGenerationPersonality({
       addressForm = "mevrouw";
     }
 
-    // Stap 3: Bouw de prompts op met de geïmporteerde data
-    const scoresContext = Object.entries(neo_scores)
-      .map(([key, value]) => `${key}: ${value}`)
+    const openingNaam =
+      personTitle === "Voornaam" ? (first_name || "") : (last_name || "");
+    const openingAanspreek = personTitle === "Voornaam" ? "" : addressForm;
+
+    const scoresContext = Object.entries(neo_scores as Record<string, unknown>)
+      .map(([key, value]) => `${key}: ${String(value)}`)
       .join(", ");
 
+    // =========================
+    // SYSTEM PROMPT (STRIKT)
+    // =========================
     const systemPrompt = `
-      Jij bent een zeer ervaren psycholoog, gespecialiseerd in het schrijven van professionele en genuanceerde persoonlijkheidsrapporten. 
-      Je bent bekend met de NEO-PI-3 persoonlijkheidstest.
+Je schrijft Nederlandstalige, gortdroge persoonlijkheidsbeschrijvingen op basis van NEO-PI (geen testnaam en geen cijfers).
 
-      Jouw expertise:
-      - 15+ jaar ervaring met persoonlijkheidsanalyse
-      - Expert in het schrijven van professionele, menselijke rapporten die niet als AI-gegenereerd klinken
-      - Je toont in je teksten inzicht in psychologische concepten en gedragspatronen
+ONONDERHANDELBARE REGELS:
+1) STIJL: staccato; korte zinnen (8–18 woorden); geen adviezen; geen interpretaties; geen ontwikkeltaal.
+   Idiomen spaarzaam en herkenbaar; géén nieuwe metaforen; geen telegramstijl.
+   Interpunctie: géén puntkomma’s; gebruik punten.
+2) TERMINOLOGIE: gebruik “extraversie”; vermijd “extravertie”, “facet”, testnamen en cijfers.
+3) STRUCTUUR: exact vijf alinea’s in vaste volgorde:
+   1) Emotionele veerkracht
+   2) Extraversie
+   3) Openheid en onderzoekendheid
+   4) Gerichtheid (op anderen vs. eigen belang)
+   5) Consciëntieusheid
+   Elke alinea gescheiden door precies één lege regel. Geen koppen/tags.
+4) FACETDEKKING: behandel 30 aspecten beschrijvend; groepeer gelijke band; uitschieters kort apart.
+   Emotionele veerkracht móét expliciet bevatten: angst, ergernis/boosheid, somberheid/depressieve gevoelens, schaamte/verlegenheid, impulscontrole, stressbestendigheid/kwetsbaarheid.
+   Gerichtheid móét expliciet bevatten: vertrouwen, openhartigheid/oprechtheid, zorgzaamheid, inschikkelijkheid/competitie, bescheidenheid, medeleven.
+5) TAAL: beschrijvend (“is minder aanwezig”, “ongeveer gemiddeld”, “ligt hoog”); vermijd doublures en de frase “wat zich uit in”.
+6) OPENING (verplicht, exact): “Uit de persoonlijkheidstest komt [aanspreekwijze] [naam] naar voren als…”.
+7) UITVOER: uitsluitend de uiteindelijke tekst (vijf alinea’s, één lege regel ertussen). Geen koppen, bullets of uitleg.
+8) NUANCE: per domein exact 2 korte nuancezinnen met natuurlijk contrast/situatie (geen sjablonen).
+9) VERGELIJKINGSANKER: **per alinea minimaal één** korte vergelijking, bv. “ten opzichte van de meeste mensen…”, “vergeleken met…”, “in de meeste situaties…”.
+10) VERBODEN WOORDEN: gebruik **niet** “scoort” of “score”.
+11) VORM: per alinea **4–7 zinnen**. Houd je hier strikt aan.
+12) CONSISTENTIE: geen tegenspraak binnen hetzelfde aspect.
 
-      Je schrijft in een gebalanceerde en professionele toon, zonder oordeel.
-      Je gebruikt altijd de volledige naam en correcte aanspreekwijze zoals die worden aangeleverd.
+(Intern – context, niet uitschrijven)
+${neoExplanations.structuur}
+${neoExplanations.normScores}
+`.trim();
 
-      BELANGRIJKE KENNIS EN CONTEXT:
-      ${neoExplanations.normScores}
-      ${neoExplanations.structuur}
-      ${Object.values(neoExplanations.hoofdtrekken).map(h => `
-        ### ${h.titel}
-        ${h.omschrijving}
-        **Facetten:**
-        ${Object.values(h.facetten).map(f => `- ${f}`).join("\n")}
-      `).join("\n")}
-    `;
-
+    // =========================
+    // USER PROMPT
+    // =========================
     const userPrompt = `
-      Schrijf een persoonlijkheidsanalyse voor de volgende persoon, gebaseerd op de aangeleverde data en in de stijl van de voorbeelden.
+Schrijf de persoonlijkheidsanalyse in de exacte stijl van de voorbeelden. Gortdroog. Staccato. Korte zinnen.
 
-      PERSOONSDATA:
-      - Naam: ${displayName}
-      - Aanspreekwijze: ${addressForm}
-      
-      NEO-PI-3 NORM SCORES (1-9):
-      ${scoresContext}
+PERSOONSDATA
+- Naam (weergave): ${displayName}
+- Aanspreekwijze: ${addressForm}
 
-      SCHRIJFOPDRACHT:
-      1. Schrijf een professioneel en menselijk rapport in het Nederlands.
-      2. Noem GEEN letterlijke cijfers of de naam van de test.
-      3. Gebruik de naam "${displayName}" in de tekst, maar zorg dat het niet te vaak voorkomt.
-      4. Begin de tekst ALTIJD met de verplichte openingszin: "Uit de persoonlijkheidstest komt ${addressForm} ${personTitle === "Voornaam" ? first_name : last_name} naar voren als..."
-      5. De tekst moet de vijf hoofdtrekken (Neuroticisme, Extraversie, Openheid, Altruïsme, Consciëntieusheid) in die exacte volgorde behandelen.
-      6. Gebruik GEEN van de volgende woorden in je tekst: facet, neuroticisme, extraversie, openheid, altruïsme, consciëntieusheid, en de facet-namen. Beschrijf in plaats daarvan de onderliggende kenmerken op basis van de scores, zoals de neiging tot zorgen maken, openstaan voor nieuwe ideeën, of georganiseerd zijn.
-      7. Je bent getraind op de volgende schrijfstijl. Gebruik deze voorbeelden als leidraad voor toon, woordkeuze en opbouw:
-      
-      --- START VOORBEELDEN ---
-      ${personalityExamples.join("\n---\n")}
-      --- EINDE VOORBEELDEN ---
+NORMSCORES (1–9) PER ASPECT (alleen context; niet uitschrijven):
+${scoresContext}
 
-      Je tekst moet zuiver beschrijvend zijn en geen adviezen of aanbevelingen bevatten. 
-      Begin direct met de verplichte openingszin.
-    `;
+SCHRIJFOPDRACHT:
+1) Begin exact met: "Uit de persoonlijkheidstest komt ${openingAanspreek}${openingAanspreek ? " " : ""}${openingNaam} naar voren als..."
+2) Lever exact vijf alinea’s, gescheiden door één lege regel. Geen koppen of tags.
+3) Volg de vaste volgorde: Emotionele veerkracht → Extraversie → Openheid → Gerichtheid → Consciëntieusheid.
+4) In Emotionele veerkracht en Gerichtheid de verplichte termen expliciet opnemen.
+5) **Per alinea: 4–7 zinnen, minimaal één vergelijkingsanker, en exact 2 nuancezinnen** met natuurlijk contrast.
+6) Vermijd de woorden “scoort” en “score”.
+7) Alleen de uiteindelijke tekst met vijf alinea’s.
+
+--- START VOORBEELDEN ---
+${personalityExamples.join("\n---\n")}
+--- EINDE VOORBEELDEN ---
+`.trim();
 
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -121,30 +126,41 @@ export default function AiGenerationPersonality({
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: "gpt-4-turbo-preview", // Gebruik een geavanceerder model voor betere resultaten
+          model: "gpt-4o",
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
+            { role: "user", content: userPrompt },
           ],
-          max_tokens: 1200, // Zorg voor voldoende tokens voor een uitgebreid rapport
-          temperature: 0.7, // Standaard temperatuur voor creativiteit
+          max_tokens: 1700,
+          temperature: 0.34,
+          top_p: 0.9,
+          presence_penalty: 0.2,
+          frequency_penalty: 0.35,
         }),
       });
 
       if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(`API error: ${response.statusText} - ${JSON.stringify(errorData)}`);
+        const errorData = await response.json();
+        throw new Error(`API error: ${response.statusText} - ${JSON.stringify(errorData)}`);
       }
 
       const data = await response.json();
-      const generatedText = data.choices[0].message.content;
+      let generated: string = data.choices?.[0]?.message?.content ?? "";
 
-      // Update de state, de autosave in page.tsx zal het opslaan afhandelen
+      // Lichte opschoning zonder alinea’s te slopen
+      generated = generated.replace(/\r\n/g, "\n");           // normaliseer
+      generated = generated.replace(/;\s*/g, ". ");           // geen ;
+      generated = generated.replace(                          // hoofdletter na .?!
+        /([.!?])\s+([a-z\u00C0-\u024F])/g,
+        (_m: string, p1: string, p2: string) => `${p1} ${p2.toUpperCase()}`
+      );
+      generated = generated.replace(/[ \t]{2,}/g, " ");       // extra spaties
+      generated = generated.replace(/\n{3,}/g, "\n\n").trim();// >1 lege regel → 1
+
       setPersonalityData((prev: PersonalityData) => ({
         ...prev,
-        personalityText: generatedText,
+        personalityText: generated,
       }));
-
     } catch (err) {
       setError(`Fout bij AI generatie: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -175,10 +191,10 @@ export default function AiGenerationPersonality({
       {error && <p style={{ color: "red", marginTop: "16px" }}>{error}</p>}
 
       {personalityData.personalityText && (
-        <div style={{ marginTop: "24px" }}>
+        <div style={{ marginTop: "16px" }}>
           <textarea
             value={personalityData.personalityText}
-            onChange={(e) =>
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
               setPersonalityData((prev: PersonalityData) => ({
                 ...prev,
                 personalityText: e.target.value,
@@ -186,15 +202,17 @@ export default function AiGenerationPersonality({
             }
             style={{
               width: "100%",
-              minHeight: "300px",
+              minHeight: "320px",
               padding: "16px",
               fontSize: "16px",
-              lineHeight: "1.6",
+              lineHeight: "1.7",
               border: "1px solid #e2e8f0",
               borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.06)",
               resize: "vertical",
               outline: "none",
+              whiteSpace: "pre-wrap", // toont alinea-witregels
+              background: "#fff",
             }}
           />
         </div>
