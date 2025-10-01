@@ -2,7 +2,6 @@
 
 import { useState, type ChangeEvent } from "react";
 import { PersonalityData } from "./personality-types";
-import { neoExplanations } from "./neo-explanations";
 import { personalityExamples } from "./personality-examples";
 
 interface Props {
@@ -12,6 +11,75 @@ interface Props {
   sessionId: string;
 }
 
+/* ──────────────────────────────────────────────────────────────
+   1️⃣  SYSTEM‑PROMPT – STRIKTE INSTRUCTIES (VERWIJDERDE VETO A5)
+   ---------------------------------------------------------------- */
+   const systemPrompt = `
+   Je schrijft een zakelijk, droog, objectief Nederlands persoonlijkheidsrapport (de modelnaam mag NIET genoemd worden).
+   
+   🚫 **KERNWET – SCORE‑TERMIEN (gebruik ALLEEN deze 9 termen)**
+   1 = zeer laag | 2 = laag | 3 = beneden gemiddeld | 4 = licht gemiddeld |
+   5 = gemiddeld | 6 = licht boven gemiddeld | 7 = bovengemiddeld |
+   8 = hoog | 9 = zeer hoog
+   
+   ✅ **HARD‑OVERRIDES (VETO‑REGELS) – MOETEN EXACT WORDEN GEHOUDEN**
+   - Fantasie (O1) < 4: Gebruik ALLEEN “nuchter”, “feitelijk” of “pragmatisch”. De zin over O1 moet **altijd** 12‑15 woorden bevatten.
+   - Fantasie (O1) > 6: Gebruik de termen “nuchter”, “feitelijk” of “pragmatisch” **NIET**.
+   - Betrouwbaarheid (C3): Wees zeer voorzichtig met de beschrijving van **Betrouwbaarheid**; de tekst mag **NOOIT** de suggestie wekken van ontrouw, onbetrouwbaarheid, of een lakse houding ten opzichte van afspraken, ongeacht de score.
+   - Vrolijkheid (E6): Geen zinnen over “rust nodig heeft” of onlogische contrasten met rust.
+   - **Neuroticisme (N):** Als N beneden gemiddeld (≤ 3) is, benoem dan de **hoge emotionele veerkracht** in de openingszin, niet de lage veerkracht.
+   
+   📝 📝**STIJL & STRUCTUUR**
+1. **ZINLENGTE**: De beschrijving van elk facet moet in **vloeiende, zakelijke zinnen** worden verwerkt. **Elke zin moet tussen de 12 en 15 woorden liggen**. De **exacte term** van het facet (bijv. Bescheidenheid, Zelfdiscipline) hoeft **NIET** in de zin te worden opgenomen.
+2. **STRIKTE ZINSOPBOUW VETO**: **Verboden** is elke zinsconstructie die leidt tot een zin van minder dan 12 woorden. Start de zin altijd met een beschrijvende zin die het gedrag en de score integreert.
+3. **PUNCTUATIE**: Gebruik punten (.) om zinnen duidelijk af te bakenen en de lezerssnelheid te optimaliseren. Gebruik komma's (,) alleen om onderdelen binnen de zin te scheiden, niet om zinnen onnodig te verlengen.
+4. **STRUCTUUR**: Exact **vijf alinea’s** in vaste volgorde: 1) Emotionele veerkracht (N), 2) Extraversie (E), 3) Openheid & onderzoekendheid (O), 4) Altruïsme (A), 5) Consciëntieusheid (C).
+5. **ALINEA-EISEN**: Elke alinea 4‑7 zinnen, gescheiden door één lege regel, **geen koppen/tags**.
+6. **ANKERS**: Per alinea maximaal één van “ten opzichte van de meeste mensen”, “vergeleken met anderen”, of “in de meeste situaties”.
+7. **NUANCE**: Per alinea exact twee nuance‑zinnen (een contrast‑zin of een algemene samenvatting bij middenscores 4‑6).
+   
+   🔍 **INHOUD EN FOCUS**
+   - **Opvallend (1‑3 of 7‑9)**: Schrijf hierover een **volledige zin** van 12‑15 woorden met de **exacte term**.
+   - **Minder opvallend (4, 5, 6)**: Combineer in een zin die de **exacte term** bevat.
+   - **ISOLATIE VAN FACETTEN (versoepeld)**: Zorg ervoor dat de beschrijving van elk afzonderlijk facet in **één, duidelijke, complete zin** wordt behandeld. Uitzondering: Facetten met minder opvallende scores (4, 5, 6) mogen logisch worden gecombineerd.
+   - **NEUROTICISME (N) SAMENVATTING**: De alinea mag beginnen met een **algemene samenvatting** van de lage N-scores, maar vermijd daarna doublures (herhaling van 'negatieve emoties' of 'somber'). Beschrijf elk facet daarna afzonderlijk en vloeiend.
+   - **Geen losse korte zinnen** (i.e. altijd > 12 woorden).
+   
+   🔤 **TOEGESTANE IDIOMEN**: Alleen bij scores “hoog” of “zeer hoog” voor het betreffende facet.
+   ❌ **VERBODEN WOORDEN**: ‘facet’, ‘test’, ‘%’, ‘;’, ‘advies’, ‘ontwikkeltaal’, ‘cijfers’, **'iets'**, **'hoog' (gebruikt als synoniem voor 'bovengemiddeld')**, **'zeer laag' (gebruikt als synoniem voor 'laag')**, **'hoge mate' (gebruikt als synoniem voor 'bovengemiddeld')**, **'gemiddelde' (gebruikt als synoniem voor 'licht gemiddeld' of 'licht boven gemiddeld')**.
+   
+   --- EINDE SYSTEM‑PROMPT ---`.trim();
+/* ──────────────────────────────────────────────────────────────
+   2️⃣  USER‑PROMPT – INPUT‑VARIABELEN
+   ---------------------------------------------------------------- */
+const userPromptTemplate = (
+  displayName: string,
+  addressForm: string,
+  openingAanspreek: string,
+  openingNaam: string,
+  scoresContext: string
+) => `
+Schrijf de persoonlijkheidsanalyse volgens precies de stijl en structuur die in de system‑prompt is beschreven.
+
+**VOORBEELDEN (GEBRUIK DEZE STIJL EN TONALITEIT)**
+${personalityExamples.slice(0, 3).join("\n---\n")}
+
+PERSOONSDATA
+- Naam (weergave): ${displayName}
+- Aanspreekwijze: ${addressForm}
+
+NORMSCORES (1–9) PER FACET (alleen ter informatie):
+${scoresContext}
+
+SCHRIJFOPDRACHT
+1. Begin exact met: "Uit de persoonlijkheidstest komt ${openingAanspreek}${openingAanspreek ? " " : ""}${openingNaam} naar voren als..."
+2. Lever exact vijf alinea’s, gescheiden door één lege regel.
+3. Volg de vaste alinea-volgorde en alle regels uit de SYSTEM-PROMPT strikt.
+4. Retourneer **alleen** de uiteindelijke tekst (vijf alinea’s).`.trim();
+
+/* ──────────────────────────────────────────────────────────────
+   3️⃣  COMPONENT – LOGICA
+   ---------------------------------------------------------------- */
 export default function AiGenerationPersonality({
   personalityData,
   setPersonalityData,
@@ -28,13 +96,14 @@ export default function AiGenerationPersonality({
     const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
     const { neo_scores, personTitle, first_name, last_name } = personalityData;
 
+    /* ---- 3.1 VALIDATIE ---- */
     if (!neo_scores || !personTitle || (!first_name && !last_name)) {
-      setError("Ontbrekende gegevens: Neo-scores, naam of titel ontbreken.");
+      setError("Ontbrekende gegevens: Neo‑scores, naam of titel ontbreken.");
       setIsGenerating(false);
       return;
     }
 
-    // Aanspreekwijze + naam
+    /* ---- 3.2 NAAM & AANSPREEKFORMAAT (ongewijzigd) ---- */
     let displayName = "";
     let addressForm = "";
     if (personTitle === "Voornaam") {
@@ -52,72 +121,25 @@ export default function AiGenerationPersonality({
       personTitle === "Voornaam" ? (first_name || "") : (last_name || "");
     const openingAanspreek = personTitle === "Voornaam" ? "" : addressForm;
 
-    const scoresContext = Object.entries(neo_scores as Record<string, unknown>)
-      .map(([key, value]) => `${key}: ${String(value)}`)
+    /* ---- 3.3 SCORE CONTEXT ---- */
+    // De scores worden al correct doorgegeven via scoresContext, dit is OK.
+
+    const scoresContext = Object.entries(
+      neo_scores as Record<string, unknown>
+    )
+      .map(([k, v]) => `${k}: ${String(v)}`)
       .join(", ");
 
-    // =========================
-    // SYSTEM PROMPT (STRIKT)
-    // =========================
-    const systemPrompt = `
-Je schrijft Nederlandstalige, gortdroge persoonlijkheidsbeschrijvingen op basis van NEO-PI (geen testnaam en geen cijfers).
+    /* ---- 3.4 USER PROMPT ---- */
+    const userPrompt = userPromptTemplate(
+      displayName,
+      addressForm,
+      openingAanspreek,
+      openingNaam,
+      scoresContext
+    );
 
-ONONDERHANDELBARE REGELS:
-1) STIJL: staccato; korte zinnen (8–18 woorden); geen adviezen; geen interpretaties; geen ontwikkeltaal.
-   Idiomen spaarzaam en herkenbaar; géén nieuwe metaforen; geen telegramstijl.
-   Interpunctie: géén puntkomma’s; gebruik punten.
-2) TERMINOLOGIE: gebruik “extraversie”; vermijd “extravertie”, “facet”, testnamen en cijfers.
-3) STRUCTUUR: exact vijf alinea’s in vaste volgorde:
-   1) Emotionele veerkracht
-   2) Extraversie
-   3) Openheid en onderzoekendheid
-   4) Gerichtheid (op anderen vs. eigen belang)
-   5) Consciëntieusheid
-   Elke alinea gescheiden door precies één lege regel. Geen koppen/tags.
-4) FACETDEKKING: behandel 30 aspecten beschrijvend; groepeer gelijke band; uitschieters kort apart.
-   Emotionele veerkracht móét expliciet bevatten: angst, ergernis/boosheid, somberheid/depressieve gevoelens, schaamte/verlegenheid, impulscontrole, stressbestendigheid/kwetsbaarheid.
-   Gerichtheid móét expliciet bevatten: vertrouwen, openhartigheid/oprechtheid, zorgzaamheid, inschikkelijkheid/competitie, bescheidenheid, medeleven.
-5) TAAL: beschrijvend (“is minder aanwezig”, “ongeveer gemiddeld”, “ligt hoog”); vermijd doublures en de frase “wat zich uit in”.
-6) OPENING (verplicht, exact): “Uit de persoonlijkheidstest komt [aanspreekwijze] [naam] naar voren als…”.
-7) UITVOER: uitsluitend de uiteindelijke tekst (vijf alinea’s, één lege regel ertussen). Geen koppen, bullets of uitleg.
-8) NUANCE: per domein exact 2 korte nuancezinnen met natuurlijk contrast/situatie (geen sjablonen).
-9) VERGELIJKINGSANKER: **per alinea minimaal één** korte vergelijking, bv. “ten opzichte van de meeste mensen…”, “vergeleken met…”, “in de meeste situaties…”.
-10) VERBODEN WOORDEN: gebruik **niet** “scoort” of “score”.
-11) VORM: per alinea **4–7 zinnen**. Houd je hier strikt aan.
-12) CONSISTENTIE: geen tegenspraak binnen hetzelfde aspect.
-
-(Intern – context, niet uitschrijven)
-${neoExplanations.structuur}
-${neoExplanations.normScores}
-`.trim();
-
-    // =========================
-    // USER PROMPT
-    // =========================
-    const userPrompt = `
-Schrijf de persoonlijkheidsanalyse in de exacte stijl van de voorbeelden. Gortdroog. Staccato. Korte zinnen.
-
-PERSOONSDATA
-- Naam (weergave): ${displayName}
-- Aanspreekwijze: ${addressForm}
-
-NORMSCORES (1–9) PER ASPECT (alleen context; niet uitschrijven):
-${scoresContext}
-
-SCHRIJFOPDRACHT:
-1) Begin exact met: "Uit de persoonlijkheidstest komt ${openingAanspreek}${openingAanspreek ? " " : ""}${openingNaam} naar voren als..."
-2) Lever exact vijf alinea’s, gescheiden door één lege regel. Geen koppen of tags.
-3) Volg de vaste volgorde: Emotionele veerkracht → Extraversie → Openheid → Gerichtheid → Consciëntieusheid.
-4) In Emotionele veerkracht en Gerichtheid de verplichte termen expliciet opnemen.
-5) **Per alinea: 4–7 zinnen, minimaal één vergelijkingsanker, en exact 2 nuancezinnen** met natuurlijk contrast.
-6) Vermijd de woorden “scoort” en “score”.
-7) Alleen de uiteindelijke tekst met vijf alinea’s.
-
---- START VOORBEELDEN ---
-${personalityExamples.join("\n---\n")}
---- EINDE VOORBEELDEN ---
-`.trim();
-
+    /* ---- 3.5 CALL TO OPENAI ---- */
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -132,7 +154,7 @@ ${personalityExamples.join("\n---\n")}
             { role: "user", content: userPrompt },
           ],
           max_tokens: 1700,
-          temperature: 0.34,
+          temperature: 0.3,      // Iets lagere T voor meer precisie
           top_p: 0.9,
           presence_penalty: 0.2,
           frequency_penalty: 0.35,
@@ -140,34 +162,52 @@ ${personalityExamples.join("\n---\n")}
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`API error: ${response.statusText} - ${JSON.stringify(errorData)}`);
+        const err = await response.json();
+        throw new Error(
+          `API‑fout: ${response.statusText} – ${JSON.stringify(err)}`
+        );
       }
 
       const data = await response.json();
       let generated: string = data.choices?.[0]?.message?.content ?? "";
 
-      // Lichte opschoning zonder alinea’s te slopen
-      generated = generated.replace(/\r\n/g, "\n");           // normaliseer
-      generated = generated.replace(/;\s*/g, ". ");           // geen ;
-      generated = generated.replace(                          // hoofdletter na .?!
-        /([.!?])\s+([a-z\u00C0-\u024F])/g,
-        (_m: string, p1: string, p2: string) => `${p1} ${p2.toUpperCase()}`
-      );
-      generated = generated.replace(/[ \t]{2,}/g, " ");       // extra spaties
-      generated = generated.replace(/\n{3,}/g, "\n\n").trim();// >1 lege regel → 1
+      /* ---- 3.6 POST‑PROCESSING (minimum) ---- */
+      generated = generated
+        .replace(/\r\n/g, "\n")            // normaliseer line‑ends
+        .replace(/;\s*/g, ". ")            // geen puntkomma’s
+        .replace(/[ \t]{2,}/g, " ")       // dubbele spaties
+        .replace(/\n{3,}/g, "\n\n")        // >1 lege regel → 1
+        // HOOFDLETTERCORRECTIE toegevoegd in de vorige stap
+        .replace(/\. ([a-z])/g, (_, p1) => `. ${p1.toUpperCase()}`)
+        .replace(/^[a-z]/, (m) => m.toUpperCase()) 
+        .trim();
+
+      /* ---- 3.7 (optioneel) VALIDATIE NA GENERATIE ---- */
+      // const validatorErrors = validateReport(generated, neo_scores as any);
+      // if (validatorErrors.length) {
+      //   setError(`Validatiefouten: ${validatorErrors.join(" | ")}`);
+      //   setIsGenerating(false);
+      //   return;
+      // }
 
       setPersonalityData((prev: PersonalityData) => ({
         ...prev,
         personalityText: generated,
       }));
     } catch (err) {
-      setError(`Fout bij AI generatie: ${err instanceof Error ? err.message : String(err)}`);
+      setError(
+        `Fout bij AI‑generatie: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
     } finally {
       setIsGenerating(false);
     }
   };
 
+  /* ──────────────────────────────────────────────────────────────
+     4️⃣  UI (ongewijzigd)
+     ---------------------------------------------------------------- */
   return (
     <div style={{ marginTop: "32px" }}>
       <button
@@ -211,7 +251,7 @@ ${personalityExamples.join("\n---\n")}
               boxShadow: "0 2px 4px rgba(0,0,0,0.06)",
               resize: "vertical",
               outline: "none",
-              whiteSpace: "pre-wrap", // toont alinea-witregels
+              whiteSpace: "pre-wrap",
               background: "#fff",
             }}
           />

@@ -6,8 +6,6 @@ import { supabase } from "../../../../lib/supabase";
 import PersonalInfo from "./personal-info";
 import NeoVelden from "./neo-velden";
 import AiGenerationPersonality from "./ai-generation-personality";
-// import TabNav from "../../../components/TabNav"; // verwijderd om dubbel menu te voorkomen
-// import SaveButton from "../../../components/SaveButton";
 import { PersonalityData } from "./personality-types";
 
 export default function PersonalityPage() {
@@ -21,22 +19,55 @@ export default function PersonalityPage() {
     first_name: "",
     last_name: "",
     personTitle: "",
-    neo_scores: {},
+    neo_scores: {},          // alleen cijfers, UI‑inputs blijven gelijk
     personalityText: "",
     uploadedFile: null,
   });
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  /* -----------------------------------------------------------------
+     HELPER :  score → exacte term (1‑9 tabel)
+     ----------------------------------------------------------------- */
+  const scoreToTerm = (score?: number): string => {
+    if (score === undefined) return "";
+    const map: Record<number, string> = {
+      1: "zeer laag",
+      2: "laag",
+      3: "beneden gemiddeld",
+      4: "licht gemiddeld",
+      5: "gemiddeld",
+      6: "licht boven gemiddeld",
+      7: "bovengemiddeld",
+      8: "hoog",
+      9: "zeer hoog",
+    };
+    return map[score] ?? "";
+  };
+
+  /* -----------------------------------------------------------------
+     HELPER :  bouw één object waarin elk facet zowel score als term
+               bevat – dit *schrijft* we naar de kolom `neo_scores`.
+     ----------------------------------------------------------------- */
+  const buildCombinedNeo = (scores: Record<string, number | undefined>) => {
+    const combined: Record<string, { score?: number; term: string }> = {};
+    Object.entries(scores).forEach(([key, score]) => {
+      combined[key] = { score, term: scoreToTerm(score) };
+    });
+    return combined;
+  };
+
+  /* -----------------------------------------------------------------
+     FETCH – laad sessie, splits het (eventueel) samengestelde object
+     ----------------------------------------------------------------- */
   useEffect(() => {
     const fetchSession = async () => {
       setIsLoading(true);
       const { data, error } = await supabase
         .from("sessions")
-        .select(`*`)
+        .select("*")
         .eq("id", sessionID)
         .single();
 
@@ -44,37 +75,75 @@ export default function PersonalityPage() {
         console.error("Error fetching session:", error);
         setError("Kan sessiegegevens niet laden.");
         setIsLoading(false);
-      } else {
-        const fetchedData: PersonalityData = {
-          first_name: data.first_name || "",
-          last_name: data.last_name || "",
-          personTitle: data.person_title || "",
-          neo_scores: data.neo_scores || {},
-          personalityText: data.personality_text || "",
-          uploadedFile: null,
-          neo_report_name: data.neo_report_name || "",
-          neo_report_path: data.neo_report_path || "",
-        };
-        setPersonalityData(fetchedData);
-        setIsLoading(false);
+        return;
       }
+
+      /* -----------------------------------------------------------------
+         `data.neo_scores` kan twee vormen hebben:
+           a) { facet: { score: 4, term: "licht gemiddeld" }, … }
+           b) { facet: 4, … }   (oude records – alleen cijfer)
+         We willen alleen de **cijfers** terug in de UI‑state.
+         ----------------------------------------------------------------- */
+      const rawNeo = (data.neo_scores || {}) as Record<string, any>;
+
+      const scoresOnly: Record<string, number | undefined> = {};
+
+      Object.entries(rawNeo).forEach(([key, value]) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "score" in value // ← herkenning van het samengestelde object
+        ) {
+          // cast naar any, daarna safe‑extractie van het cijfer
+          scoresOnly[key] = (value as any).score as number | undefined;
+        } else if (typeof value === "number") {
+          // simple plain score (oude record)
+          scoresOnly[key] = value;
+        }
+        // we negeren `term` hier – de UI heeft alleen de cijfers nodig
+      });
+
+      const fetchedData: PersonalityData = {
+        first_name: data.first_name || "",
+        last_name: data.last_name || "",
+        personTitle: data.person_title || "",
+        neo_scores: scoresOnly,
+        personalityText: data.personality_text || "",
+        uploadedFile: null,
+        neo_report_name: data.neo_report_name || "",
+        neo_report_path: data.neo_report_path || "",
+      };
+
+      setPersonalityData(fetchedData);
+      setIsLoading(false);
     };
+
     if (sessionID) fetchSession();
   }, [sessionID]);
 
+  /* -----------------------------------------------------------------
+     AUTOSAVE – schrijf **gecombineerd** JSON‑object (score + term)
+                weg naar kolom `neo_scores`.
+     ----------------------------------------------------------------- */
   useEffect(() => {
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
     }
+
     autosaveTimerRef.current = setTimeout(async () => {
-      console.log("Saving changes automatically...");
+      console.log("Saving changes automatically…");
+
+      // 1️⃣  Maak het object met zowel score als term
+      const combinedNeo = buildCombinedNeo(personalityData.neo_scores);
+
+      // 2️⃣  Up‑sert naar Supabase (alleen de kolom neo_scores)
       const { error } = await supabase
         .from("sessions")
         .update({
           first_name: personalityData.first_name,
           last_name: personalityData.last_name,
           person_title: personalityData.personTitle,
-          neo_scores: personalityData.neo_scores,
+          neo_scores: combinedNeo,                // <-- **samengesteld JSONB**
           personality_text: personalityData.personalityText,
         })
         .eq("id", sessionID);
@@ -84,7 +153,7 @@ export default function PersonalityPage() {
       } else {
         console.log("Autosave succesvol!");
       }
-    }, 1500);
+    }, 1500); // 1,5 s debounce‑timer
 
     return () => {
       if (autosaveTimerRef.current) {
@@ -93,6 +162,9 @@ export default function PersonalityPage() {
     };
   }, [personalityData, sessionID]);
 
+  /* -----------------------------------------------------------------
+     RENDER (ongewijzigd)
+     ----------------------------------------------------------------- */
   if (isLoading) {
     return (
       <div
@@ -103,7 +175,7 @@ export default function PersonalityPage() {
           height: "100vh",
         }}
       >
-        Laden...
+        Laden…
       </div>
     );
   }
@@ -114,7 +186,7 @@ export default function PersonalityPage() {
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px" }}>
-      {/* Header bovenaan de pagina */}
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -126,10 +198,8 @@ export default function PersonalityPage() {
         <h2 style={{ fontSize: "24px", fontWeight: "600", color: "#003366" }}>
           Persoonlijkheidsanalyse
         </h2>
-        {/* Geen extra knoppen hier; autosave is actief */}
+        {/* geen extra “Opslaan”‑knop – autosave regelt alles */}
       </div>
-
-      {/* Verwijderd: <TabNav /> om dubbel menu te voorkomen */}
 
       <div
         style={{
